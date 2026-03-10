@@ -62,24 +62,24 @@ Khi cần debug, AI phải yêu cầu human cung cấp:
 
 ```
 ├── ANTIGRAVY.md
-├── conversations
-├── include
+├── conversations\
+├── include\
 │   ├── capture.h
 │   ├── logger.h
 │   ├── mem_pool.h
 │   └── ring_buff.h
 ├── Makefile
-├── ouput
+├── output\
 ├── REQUIREMENT.md
-├── src
-│   ├── app
-│   ├── core
+├── src\
+│   ├── app\
+│   ├── core\
 │   │   ├── logger.c
 │   │   ├── mem_pool.c
 │   │   └── ring_buff.c
-│   ├── hardware
+│   ├── hardware\
 │   └── main.c
-└── tests
+└── tests\
     ├── test_mem_pool.c
     └── test_ring_buff.c
 

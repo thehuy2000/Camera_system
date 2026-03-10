@@ -55,7 +55,13 @@ static int do_snapshot(const char *dev_name)
 	}
 
 	size_t bytes_read = 0;
-	LOG_INFO("Taking snapshot...");
+	LOG_INFO("Taking snapshot... Dropping the first 100 frames.");
+	
+	for (int i = 0; i < 100; i++) {
+		cam_get_frame(g_cam, buffer, MAX_FRAME_SIZE, &bytes_read);
+	}
+
+	LOG_INFO("Capturing the 16th frame...");
 	if (cam_get_frame(g_cam, buffer, MAX_FRAME_SIZE, &bytes_read) < 0 || bytes_read == 0) {
 		LOG_ERROR("Failed to capture snapshot frame");
 		free(buffer);
@@ -100,6 +106,18 @@ static void *producer_thread(void *arg)
 	size_t bytes_read;
 
 	LOG_INFO("Producer thread started.");
+
+	/* Bỏ qua 15 frame đầu để camera ổn định (AWB/AE) */
+	void *drop_buf = malloc(MAX_FRAME_SIZE);
+	if (drop_buf) {
+		size_t drop_bytes;
+		LOG_INFO("Dropping first 100 frames...");
+		for (int i = 0; i < 100; i++) {
+			cam_get_frame(g_cam, drop_buf, MAX_FRAME_SIZE, &drop_bytes);
+		}
+		free(drop_buf);
+	}
+	LOG_INFO("Start capturing frames...");
 
 	while (g_running) {
 		frame_ptr = pool_alloc(g_pool);
