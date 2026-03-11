@@ -10,6 +10,7 @@ struct mem_pool {
 	size_t block_size;     /* Kích thước mỗi block */
 	size_t free_count;     /* Số lượng block còn trống */
 	pthread_mutex_t lock;  /* Mutex bảo vệ trạng thái nội bộ */
+	pthread_cond_t  not_empty; /* Signal khi có block được trả về (pool_free) */
 };
 
 mem_pool_t *pool_init(size_t num_blocks, size_t block_size)
@@ -56,6 +57,14 @@ mem_pool_t *pool_init(size_t num_blocks, size_t block_size)
 		return NULL;
 	}
 
+	if (pthread_cond_init(&pool->not_empty, NULL) != 0) {
+		pthread_mutex_destroy(&pool->lock);
+		free(pool->free_blocks);
+		free(pool->memory);
+		free(pool);
+		return NULL;
+	}
+
 	return pool;
 }
 
@@ -71,6 +80,25 @@ void *pool_alloc(mem_pool_t *pool)
 		pool->free_count--;
 		block = pool->free_blocks[pool->free_count];
 	}
+	pthread_mutex_unlock(&pool->lock);
+
+	return block;
+}
+
+void *pool_alloc_blocking(mem_pool_t *pool)
+{
+	void *block;
+
+	if (!pool)
+		return NULL;
+
+	pthread_mutex_lock(&pool->lock);
+	while (pool->free_count == 0) {
+		/* Chờ cho tới khi pool_free() trả lại ít nhất một block */
+		pthread_cond_wait(&pool->not_empty, &pool->lock);
+	}
+	pool->free_count--;
+	block = pool->free_blocks[pool->free_count];
 	pthread_mutex_unlock(&pool->lock);
 
 	return block;
@@ -102,6 +130,8 @@ int pool_free(mem_pool_t *pool, void *block)
 		pool->free_blocks[pool->free_count] = block;
 		pool->free_count++;
 		ret = 0;
+		/* Báo cho pool_alloc_blocking() đang chờ biết có block mới */
+		pthread_cond_signal(&pool->not_empty);
 	}
 	pthread_mutex_unlock(&pool->lock);
 
@@ -113,6 +143,7 @@ void pool_destroy(mem_pool_t *pool)
 	if (!pool)
 		return;
 
+	pthread_cond_destroy(&pool->not_empty);
 	pthread_mutex_destroy(&pool->lock);
 	free(pool->free_blocks);
 	free(pool->memory);

@@ -13,7 +13,7 @@
 #include <time.h>
 #include <signal.h>
 
-#define POOL_BLOCKS 10
+#define POOL_BLOCKS 5
 /* Giả định độ phân giải 640x480 dạng YUYV 16 bit -> Cần khoảng 600KB/frame */
 #define MAX_FRAME_SIZE (640 * 480 * 2) 
 
@@ -55,13 +55,13 @@ static int do_snapshot(const char *dev_name)
 	}
 
 	size_t bytes_read = 0;
-	LOG_INFO("Taking snapshot... Dropping the first 100 frames.");
+	LOG_INFO("Taking snapshot... Dropping the first 50 frames.");
 	
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 50; i++) {
 		cam_get_frame(g_cam, buffer, MAX_FRAME_SIZE, &bytes_read);
 	}
 
-	LOG_INFO("Capturing the 16th frame...");
+	LOG_INFO("Capturing the 51th frame...");
 	if (cam_get_frame(g_cam, buffer, MAX_FRAME_SIZE, &bytes_read) < 0 || bytes_read == 0) {
 		LOG_ERROR("Failed to capture snapshot frame");
 		free(buffer);
@@ -107,12 +107,12 @@ static void *producer_thread(void *arg)
 
 	LOG_INFO("Producer thread started.");
 
-	/* Bỏ qua 15 frame đầu để camera ổn định (AWB/AE) */
+	/* Bỏ qua 50 frame đầu để camera ổn định (AWB/AE) */
 	void *drop_buf = malloc(MAX_FRAME_SIZE);
 	if (drop_buf) {
 		size_t drop_bytes;
-		LOG_INFO("Dropping first 100 frames...");
-		for (int i = 0; i < 100; i++) {
+		LOG_INFO("Dropping first 50 frames...");
+		for (int i = 0; i < 50; i++) {
 			cam_get_frame(g_cam, drop_buf, MAX_FRAME_SIZE, &drop_bytes);
 		}
 		free(drop_buf);
@@ -120,12 +120,8 @@ static void *producer_thread(void *arg)
 	LOG_INFO("Start capturing frames...");
 
 	while (g_running) {
-		frame_ptr = pool_alloc(g_pool);
-		if (!frame_ptr) {
-			LOG_ERROR("Memory pool exhausted! Frame dropped.");
-			usleep(10000);
-			continue;
-		}
+		/* Chờ cho tới khi có block rảnh; không bao giờ bỏ frame */
+		frame_ptr = pool_alloc_blocking(g_pool);
 
 		/* Timeout đọc tự xử lý bên trong cam_get_frame */
 		if (cam_get_frame(g_cam, frame_ptr, MAX_FRAME_SIZE, &bytes_read) < 0) {

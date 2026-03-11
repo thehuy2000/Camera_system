@@ -26,6 +26,15 @@ mem_pool_t *pool_init(size_t num_blocks, size_t block_size);
 void *pool_alloc(mem_pool_t *pool);
 
 /*
+ * pool_alloc_blocking() - Lấy một block nhớ từ pool, chờ (block) nếu pool cạn
+ * @pool: Con trỏ tới memory pool
+ *
+ * Khác pool_alloc(): hàm này sẽ ngủ cho tới khi có block được trả về qua pool_free().
+ * Return: Con trỏ tới block nhớ (không bao giờ trả về NULL trừ khi pool == NULL)
+ */
+void *pool_alloc_blocking(mem_pool_t *pool);
+
+/*
  * pool_free() - Trả lại block nhớ vào pool
  * @pool: Con trỏ tới memory pool
  * @block: Con trỏ tới block bộ nhớ cần trả
