@@ -54,6 +54,6 @@ Chương trình cung cấp 2 chế độ hoạt động chính:
 │   ├── hardware/      # Giao tiếp V4L2 Camera
 │   ├── app/           # Logic xử lý Snapshot & Record
 │   └── main.c         # Entry point & CLI handling
-├── tests/             # Mã nguồn Unit Test (Unity/CMocka)
+├── tests/             # Mã nguồn Unit Test 
 ├── output/            # Thư mục lưu kết quả
 └── CMakeLists.txt     # Build system

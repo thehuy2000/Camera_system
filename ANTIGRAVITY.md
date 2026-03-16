@@ -1,4 +1,4 @@
-# CLAUDE.md — AI Control Panel
+# ANTIGRAVITY.md — AI Control Panel
 
 > File này là entry point cho AI. Đọc file này TRƯỚC KHI đọc bất kỳ thứ gì khác trong project.
 
