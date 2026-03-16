@@ -61,25 +61,36 @@ Khi cần debug, AI phải yêu cầu human cung cấp:
 ## Cấu trúc Project
 
 ```
-├── ANTIGRAVY.md
-├── conversations\
-├── include\
-│   ├── capture.h
-│   ├── logger.h
-│   ├── mem_pool.h
-│   └── ring_buff.h
+├── ANTIGRAVITY.md
+├── ARCHITECTURE.md
+├── conversations
+│   └── 2026-03-10_architecture_agreement.md
+├── include
+│   ├── camera.h
+│   ├── capture.h
+│   ├── encoder.h
+│   ├── logger.h
+│   ├── mem_pool.h
+│   └── ring_buff.h
 ├── Makefile
-├── output\
+├── output
+├── README.md
 ├── REQUIREMENT.md
-├── src\
-│   ├── app\
-│   ├── core\
-│   │   ├── logger.c
-│   │   ├── mem_pool.c
-│   │   └── ring_buff.c
-│   ├── hardware\
-│   └── main.c
-└── tests\
+├── SEQUENCE.md
+├── src
+│   ├── app
+│   ├── codec
+│   │   └── encoder.c
+│   ├── core
+│   │   ├── logger.c
+│   │   ├── mem_pool.c
+│   │   └── ring_buff.c
+│   ├── hardware
+│   │   └── camera.c
+│   └── main.c
+└── tests
+    ├── test_encoder.c
+    ├── test_logger.c
     ├── test_mem_pool.c
     └── test_ring_buff.c
 
@@ -97,10 +108,3 @@ AI PHẢI lưu lại cuộc hội thoại vào `conversations/`.
 - **Nội dung**: Tóm tắt bối cảnh, các quyết định, lý do, và commits liên quan
 - **Lưu ý**: AI chỉ tạo/cập nhật file. Việc commit conversation logs do human tự thực hiện.
 
-## Workflow AI-First
-
-1. **Brainstorm**: Thảo luận requirement với AI → lưu vào `conversations/`
-2. **Vibe coding**: Prototype nhanh với AI (chất lượng thấp, tốc độ cao)
-3. **Review**: Demo + review sequence diagram
-4. **Production coding**: Code lại chuẩn — developer PHẢI hiểu từng dòng
-5. **Testing**: Bàn giao docs + conversation logs cho tester
