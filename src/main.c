@@ -3,6 +3,7 @@
 #include "mem_pool.h"
 #include "ring_buff.h"
 #include "encoder.h"
+#include "streaming.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,6 +99,7 @@ struct record_context {
 	h264_encoder_t  *encoder;       /* NULL = raw mode, non-NULL = H.264 mode */
 	size_t           frames_captured;
 	size_t           frames_written;
+	int              stream_mode;   /* 1 = push NAL to RTSP server thay vì ghi file */
 };
 
 /* Luồng lấy hình ảnh */
@@ -176,7 +178,14 @@ static void *consumer_thread(void *arg)
 		}
 
 		/* Bỏ qua 4 byte dung lượng đầu (offset 4 byte) để ghi data gốc */
-		if (ctx->encoder) {
+		if (ctx->encoder && ctx->stream_mode) {
+			/* RTSP stream mode: encode và push từng NAL unit qua RTSP  */
+			encoder_encode_frame_cb(ctx->encoder,
+			                        (char *)frame_ptr + 4,
+			                        payload_size,
+			                        (nal_cb_t)rtsp_server_push_nal,
+			                        NULL);
+		} else if (ctx->encoder) {
 			/* H.264 encode mode */
 			encoder_encode_frame(ctx->encoder,
 			                     (char *)frame_ptr + 4,
@@ -341,12 +350,93 @@ encode_cleanup_encoder:
 	return 0;
 }
 
+/*
+ * Chế độ 4: RTSP Live Streaming
+ * Encode H.264 real-time và phát qua RTSP/RTP (live555), không ghi file.
+ */
+static int do_stream(const char *dev_name)
+{
+	pthread_t prod_tid, cons_tid;
+	struct record_context ctx = {0};
+	encoder_cfg_t enc_cfg = {
+		.width        = 640,
+		.height       = 480,
+		.fps          = DEFAULT_FPS,
+		.bitrate_kbps = 800,  /* ABR 800kbps — ổn định hơn CRF cho streaming */
+		.crf          = 0,
+	};
+
+	/* Khởi tạo Core */
+	g_pool = pool_init(POOL_BLOCKS, MAX_FRAME_SIZE + 4);
+	if (!g_pool) { LOG_ERROR("Failed to init memory pool"); return -1; }
+
+	g_ring = ring_buff_init(POOL_BLOCKS);
+	if (!g_ring) {
+		LOG_ERROR("Failed to init ring buffer");
+		pool_destroy(g_pool);
+		return -1;
+	}
+
+	/* Khởi tạo Encoder */
+	ctx.encoder = encoder_init(&enc_cfg);
+	if (!ctx.encoder) {
+		LOG_ERROR("Failed to init H.264 encoder");
+		ring_buff_destroy(g_ring);
+		pool_destroy(g_pool);
+		return -1;
+	}
+	ctx.stream_mode = 1;
+
+	/* Khởi tạo RTSP server */
+	if (rtsp_server_create(8554, enc_cfg.fps,
+	                       enc_cfg.width, enc_cfg.height, "live") != 0) {
+		LOG_ERROR("Failed to create RTSP server");
+		goto stream_cleanup_encoder;
+	}
+
+	if (rtsp_server_start() != 0) {
+		LOG_ERROR("Failed to start RTSP server");
+		rtsp_server_destroy();
+		goto stream_cleanup_encoder;
+	}
+
+	/* Khởi tạo Camera */
+	g_cam = cam_open(dev_name);
+	if (!g_cam) goto stream_cleanup_rtsp;
+
+	if (cam_init(g_cam, 640, 480, V4L2_PIX_FMT_YUYV) < 0)
+		goto stream_cleanup_cam;
+
+	LOG_INFO("RTSP streaming started. Open VLC with: rtsp://127.0.0.1:8554/live");
+	LOG_INFO("Press Ctrl+C to stop.");
+
+	pthread_create(&prod_tid, NULL, producer_thread, &ctx);
+	pthread_create(&cons_tid, NULL, consumer_thread, &ctx);
+
+	pthread_join(prod_tid, NULL);
+	pthread_join(cons_tid, NULL);
+
+	LOG_INFO("Stream finished. Captured: %zu frames", ctx.frames_captured);
+
+stream_cleanup_cam:
+	cam_close(g_cam);
+stream_cleanup_rtsp:
+	rtsp_server_stop();
+	rtsp_server_destroy();
+stream_cleanup_encoder:
+	encoder_destroy(ctx.encoder);
+	ring_buff_destroy(g_ring);
+	pool_destroy(g_pool);
+	return 0;
+}
+
 static void print_usage(const char *prog)
 {
-	printf("Usage: %s [snapshot|record|encode] [device]\n", prog);
+	printf("Usage: %s [snapshot|record|encode|stream] [device]\n", prog);
 	printf("  snapshot : Take a single picture (raw YUYV)\n");
 	printf("  record   : Continuously record raw video until Ctrl+C\n");
 	printf("  encode   : Record and encode to H.264 (.h264) until Ctrl+C\n");
+	printf("  stream   : Live RTSP stream at rtsp://<ip>:8554/live (view via VLC)\n");
 	printf("  device   : Optional camera device (default: /dev/video0)\n");
 }
 
@@ -372,6 +462,8 @@ int main(int argc, char **argv)
 		do_record(dev);
 	} else if (strcmp(mode, "encode") == 0) {
 		do_encode(dev);
+	} else if (strcmp(mode, "stream") == 0) {
+		do_stream(dev);
 	} else {
 		LOG_ERROR("Unknown mode: %s", mode);
 		print_usage(argv[0]);

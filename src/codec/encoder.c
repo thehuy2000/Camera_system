@@ -251,6 +251,57 @@ int encoder_encode_frame(h264_encoder_t *enc,
 }
 
 /* ---------------------------------------------------------------------------
+ * encoder_encode_frame_cb() - Encode một frame, gọi callback với mỗi NAL
+ * ---------------------------------------------------------------------------
+ */
+int encoder_encode_frame_cb(h264_encoder_t *enc,
+                            const void     *yuyv_data,
+                            size_t          yuyv_size,
+                            nal_cb_t        cb,
+                            void           *userdata)
+{
+    x264_nal_t *nals;
+    int         n_nals;
+    int         frame_size;
+    int         i;
+
+    if (!enc || !yuyv_data || !cb) return -1;
+
+    size_t expected = (size_t)(enc->width * enc->height * 2);
+    if (yuyv_size < expected) {
+        LOG_ERROR("encoder_encode_frame_cb: buffer too small (%zu < %zu)",
+                  yuyv_size, expected);
+        return -1;
+    }
+
+    yuyv_to_i420((const uint8_t *)yuyv_data,
+                 enc->pic_in.img.plane[0],
+                 enc->pic_in.img.plane[1],
+                 enc->pic_in.img.plane[2],
+                 enc->width, enc->height);
+
+    enc->pic_in.i_pts = enc->frame_idx++;
+
+    frame_size = x264_encoder_encode(enc->handle, &nals, &n_nals,
+                                     &enc->pic_in, &enc->pic_out);
+    if (frame_size < 0) {
+        LOG_ERROR("encoder_encode_frame_cb: x264_encoder_encode failed");
+        return -1;
+    }
+
+    if (frame_size == 0) return 0; /* delay buffered, bình thường */
+
+    /* Gọi callback cho từng NAL unit */
+    for (i = 0; i < n_nals; i++) {
+        cb((const void *)nals[i].p_payload,
+           (size_t)nals[i].i_payload,
+           userdata);
+    }
+
+    return n_nals;
+}
+
+/* ---------------------------------------------------------------------------
  * encoder_flush()
  * ---------------------------------------------------------------------------
  */

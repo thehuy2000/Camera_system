@@ -2,6 +2,7 @@
 #define ENCODER_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 /*
@@ -59,6 +60,30 @@ int encoder_encode_frame(h264_encoder_t *enc,
                          const void     *yuyv_data,
                          size_t          yuyv_size,
                          FILE           *fp);
+
+/*
+ * encoder_encode_frame_cb() - Giống encode_frame() nhưng gọi callback thay vì ghi file
+ *
+ * @enc       : Encoder handle
+ * @yuyv_data : YUYV raw frame
+ * @yuyv_size : Kích thước YUYV buffer (bytes)
+ * @cb        : Hàm callback được gọi với mỗi NAL unit
+ *              Prototype: void cb(const uint8_t *data, size_t size, void *userdata)
+ * @userdata  : Con trỏ tùy ý truyền qua cho callback
+ *
+ * Return: Số NAL units >= 0, -1 nếu lỗi.
+ */
+/*
+ * nal_cb_t - Callback type dùng trong encoder_encode_frame_cb()
+ * Gưu ý: dùng `const void *` để tránh cảnh báo khi cast từ C sang C++.
+ */
+typedef void (*nal_cb_t)(const void *data, size_t size, void *userdata);
+
+int encoder_encode_frame_cb(h264_encoder_t *enc,
+                            const void     *yuyv_data,
+                            size_t          yuyv_size,
+                            nal_cb_t        cb,
+                            void           *userdata);
 
 /*
  * encoder_flush() - Flush các frames đang delay trong bộ đệm của x264
